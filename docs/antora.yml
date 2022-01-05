@@ -1,0 +1,5 @@
+name: quarkus-devservices-sqlpad
+title: Quarkus - Devservices Sqlpad
+version: dev
+nav:
+  - modules/ROOT/nav.adoc

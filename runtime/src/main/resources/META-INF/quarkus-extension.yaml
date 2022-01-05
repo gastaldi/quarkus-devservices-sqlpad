@@ -1,0 +1,10 @@
+name: Devservices SQL Pad
+#description: Devservices Sqlpad ...
+metadata:
+  keywords:
+    - devservices
+    - sqlpad
+#  guide: ...
+  categories:
+    - "data"
+  status: "preview"
