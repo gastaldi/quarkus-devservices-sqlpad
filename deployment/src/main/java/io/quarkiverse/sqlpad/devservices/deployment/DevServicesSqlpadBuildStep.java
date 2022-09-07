@@ -6,6 +6,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.jboss.logging.Logger;
+import org.slf4j.LoggerFactory;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Network;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
+import org.testcontainers.utility.DockerImageName;
+
 import io.quarkus.datasource.deployment.spi.DevServicesDatasourceResultBuildItem;
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.IsNormal;
@@ -14,13 +21,10 @@ import io.quarkus.deployment.builditem.CuratedApplicationShutdownBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.dev.devservices.GlobalDevServicesConfig;
-import io.quarkus.logging.Log;
-import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.utility.DockerImageName;
 
 public final class DevServicesSqlpadBuildStep {
+
+    private static final Logger log = Logger.getLogger(DevServicesSqlpadBuildStep.class.getName());
 
     @BuildStep
     FeatureBuildItem feature() {
@@ -33,7 +37,11 @@ public final class DevServicesSqlpadBuildStep {
         if (item.isEmpty()) {
             return null;
         }
-        Map<String, String> configProperties = item.get().getDefaultDatasource().getConfigProperties();
+        DevServicesDatasourceResultBuildItem.DbResult defaultDatasource = item.get().getDefaultDatasource();
+        if (defaultDatasource == null) {
+            return null;
+        }
+        Map<String, String> configProperties = defaultDatasource.getConfigProperties();
         String jdbcUrl = configProperties.get("quarkus.datasource.jdbc.url");
         URI uri = URI.create(jdbcUrl.substring(5));
         return new SqlPadDataSourceBuildItem("DevServices",
@@ -48,8 +56,9 @@ public final class DevServicesSqlpadBuildStep {
     @BuildStep(onlyIfNot = IsNormal.class, onlyIf = GlobalDevServicesConfig.Enabled.class)
     ServiceStartBuildItem enableSqlPad(List<SqlPadDataSourceBuildItem> dataSources,
             CuratedApplicationShutdownBuildItem closeBuildItem) {
+        System.out.println(dataSources);
         //TODO: Choose image version?
-        DockerImageName dockerImageName = DockerImageName.parse("sqlpad/sqlpad:6.8");
+        DockerImageName dockerImageName = DockerImageName.parse("sqlpad/sqlpad");
         Map<String, String> env = new HashMap<>();
         // TODO: Make it configurable?
         //        env.put("SQLPAD_ADMIN", "admin@sqlpad.com");
@@ -72,6 +81,8 @@ public final class DevServicesSqlpadBuildStep {
         GenericContainer container = new GenericContainer(dockerImageName)
                 .withEnv(env)
                 .withExposedPorts(3000)
+                .withAccessToHost(true)
+                .withNetwork(Network.SHARED)
                 .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("sqlpad")));
         container.start();
         String url = container.getHost() + ":" + container.getFirstMappedPort();
@@ -79,7 +90,7 @@ public final class DevServicesSqlpadBuildStep {
         closeBuildItem.addCloseTask(new Runnable() {
             @Override
             public void run() {
-                Log.info("Closing SqlPad!");
+                log.info("Closing SqlPad!");
                 container.stop();
             }
         }, false);
